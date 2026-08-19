@@ -1,21 +1,31 @@
+name: livesync
 services:
-  tailscale-app:
+  tailscale:
     image: tailscale/tailscale:latest
     hostname: couch-tailscale
-    env_file: .env.tailscale-app
+    env_file: .env.tailscale
     volumes:
       - tailscale-data:/var/lib/tailscale
       - ${PWD}/ts-conf/ts-serve.json:/config/ts-serve.json:ro
+    devices:
       - /dev/net/tun:/dev/net/tun
     cap_add:
       - net_admin
       - sys_module
-    restart: unless-stopped
-  app:
+    restart: always
+    healthcheck:
+      test: ["CMD", "tailscale", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s  
+
+  couchdb:
     image: couchdb:3.4.2
-    network_mode: service:tailscale-app
+    network_mode: service:tailscale
     depends_on:
-      - tailscale-app
+      tailscale:
+        condition: service_healthy
     env_file: .env.couchdb
     volumes:
         # The files' owner will be id:5984 when you launch the image.
@@ -23,7 +33,8 @@ services:
         # So when you want to perform git pull or change something, you have to change owners back.
         - couchdb-data:/opt/couchdb/data
         - ${PWD}/conf/local.ini:/opt/couchdb/etc/local.ini
-    restart: unless-stopped
+    restart: always
+
 volumes:
   tailscale-data:
     driver: local
